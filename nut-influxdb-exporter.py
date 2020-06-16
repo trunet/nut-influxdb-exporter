@@ -42,7 +42,7 @@ if os.getenv('VERBOSE', 'false').lower() == 'true':
     print("INFLUXDB_HOST: ", host)
     print("NUT_USER: ", nut_username)
     # print("NUT_PASS: ", nut_password)
-    print("UPS_ALIAS", ups_alias)
+    print("UPS_NAME", ups_name)
     print("INTERVAL: ", interval)
     print("VERBOSE: ", verbose)
 
@@ -104,12 +104,13 @@ def construct_object(data, remove_keys, tag_keys):
 # Main infinite loop: Get the data from NUT every interval and send it to InfluxDB.
 while True:
     try:
-        ups_data = ups_client.list_vars(ups_alias)
+        ups_data = ups_client.list_vars(ups_name)
     except:
         tb = traceback.format_exc()
         if verbose == 'true':
             print(tb)
         print("Error getting data from NUT")
+        exit(1)
 
     json_body = construct_object(ups_data, remove_keys, tag_keys)
 
@@ -137,4 +138,5 @@ while True:
         if verbose == 'true':
             print(tb)
         print("Error connecting to InfluxDB.")
+        exit(2)
     time.sleep(interval)
