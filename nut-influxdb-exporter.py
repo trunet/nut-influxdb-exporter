@@ -5,29 +5,32 @@ import traceback
 
 from nut2 import PyNUTClient
 from influxdb import InfluxDBClient
+import powerwalker
 
 # InfluxDB details
-dbname = os.getenv('INFLUXDB_DATABASE', 'nutupstest')
-username = os.getenv('INFLUXDB_USER')
-password = os.getenv('INFLUXDB_PASSWORD')
-host = os.getenv('INFLUXDB_HOST', '127.0.0.1')
+dbname = os.getenv('INFLUXDB_DATABASE', 'nut')
+username = os.getenv('INFLUXDB_USER', 'nut')
+password = os.getenv('INFLUXDB_PASSWORD', 'deer8Hu0bai6wahJ')
+host = os.getenv('INFLUXDB_HOST', 'influxdb01.caovh.trunet.co')
 port = os.getenv('INFLUXDB_PORT', 8086)
 # NUT related variables
 nut_host = os.getenv('NUT_HOST', '127.0.0.1')
-nut_port = os.getenv('NUT_PORT') if os.getenv('NUT_PORT') != '' else '3493'
+nut_port = os.getenv('NUT_PORT', 3493)
 nut_password = os.getenv('NUT_PASSWORD') if os.getenv('NUT_PASSWORD') != '' else None
 nut_username = os.getenv('NUT_USERNAME') if os.getenv('NUT_USERNAME') != '' else None
 nut_watts = os.getenv('WATTS') if os.getenv('WATTS') != '' else None
+# ATS related variables
+ats_port = os.getenv('ATS_PORT', '/dev/hidraw0')
 # Other vars
-interval = float(os.getenv('INTERVAL', 21))
-ups_alias = os.getenv('UPS_ALIAS', 'UPS')
+interval = float(os.getenv('INTERVAL', 30))
+ups_alias = os.getenv('UPS_ALIAS', 'EATON')
 verbose = os.getenv('VERBOSE', 'false').lower()
 remove_keys = ['driver.version.internal', 'driver.version.usb', 'ups.beeper.status', 'driver.name', 'battery.mfr.date']
 tag_keys = ['battery.type', 'device.model', 'device.serial', 'driver.version', 'driver.version.data', 'device.mfr', 'device.type', 'ups.mfr', 'ups.model', 'ups.productid', 'ups.serial', 'ups.vendorid']
 
 print("Connecting to InfluxDB host:{}, DB:{}".format(host, dbname))
 client = InfluxDBClient(host, port, username, password, dbname)
-client.create_database(dbname)
+#client.create_database(dbname)
 if client:
     print("Connected successfully to InfluxDB")
 
@@ -48,6 +51,10 @@ ups_client = PyNUTClient(host=nut_host, port=nut_port, login=nut_username, passw
 if ups_client:
     print("Connected successfully to NUT")
 
+print("Connectint to ATS usb {}".format(ats_port))
+ats_client = powerwalker.ATS("/dev/hidraw0", usbhid=True)
+if ats_client:
+    print("Connected successfully to ATS")
 
 def convert_to_type(s):
     """ A function to convert a str to either integer or float. If neither, it will return the str. """
@@ -105,6 +112,19 @@ while True:
         print("Error getting data from NUT")
 
     json_body = construct_object(ups_data, remove_keys, tag_keys)
+
+    ats_data = ats_client.status()
+    ats_data_status = ats_data['status']
+    del(ats_data['status'])
+    ats_data = dict(ats_data, **ats_data_status)
+    json_body.append({
+        'measurement': 'ats_status',
+        'fields': ats_data,
+        'tags': {
+            'firmware': ats_client.firmware(),
+            'protocol': ats_client.protocol(),
+        }
+    })
 
     try:
         if verbose == 'true':
